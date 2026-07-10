@@ -1,0 +1,69 @@
+## 一、根目录（全局配置层）
+Office_RagFlow/
+├── frontend/
+├── backend/
+└── scripts/
+## 二、前端层 frontend
+frontend/
+├── src/
+│   ├── app/
+│   │   ├── (auth)/
+│   │   ├── (main)/
+│   │   │   ├── datasets/
+│   │   │   │   └── [id]/
+│   │   │   │       ├── documents/
+│   │   │   │       ├── chunks/
+│   │   │   │       ├── testing/
+│   │   │   │       └── settings/
+│   │   │   ├── chats/
+│   │   │   │   └── [id]/
+│   │   │   ├── searches/
+│   │   │   │   └── [id]/
+│   │   │   ├── files/
+│   │   │   └── models/
+│   │   ├── (admin)/
+│   │   │   ├── users/
+│   │   │   ├── roles/
+│   │   │   ├── departments/
+│   │   │   ├── audit/
+│   │   │   ├── monitoring/
+│   │   │   └── settings/
+│   │   └── api/
+│   │       └── proxy/
+├── components/
+│   ├── layout/
+│   ├── dataset/
+│   ├── chat/
+│   ├── search/
+│   ├── admin/
+│   └── common/
+├── hooks/
+├── lib/
+├── stores/
+└── types/
+## 三、后端层 backend
+backend/
+├── tasks/
+├── api/
+│   ├── auth/
+│   ├── v1/
+│   └── admin/
+├── services/
+├── rag/
+│   ├── retrieval/
+│   ├── generation/
+│   ├── pipeline/
+│   ├── nlp/
+│   └── prompts/
+├── deepdoc/
+│   ├── parser/
+│   ├── chunker/
+│   ├── ocr/
+│   └── table/
+├── models/
+├── migrations/
+├── middleware/
+├── utils/
+└── config/
+## 四、运维脚本层 scripts
+scripts/
