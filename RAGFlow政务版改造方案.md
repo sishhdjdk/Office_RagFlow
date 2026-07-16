@@ -5,15 +5,15 @@
 ### 1.1 背景与目标
 
 参照 [RAGFlow](https://github.com/infiniflow/ragflow) 核心设计理念与交互范式，从零新建前后端分离架构，完整复刻其三层鉴权体系、文档处理流水线、LCEL-RAG 检索增强生成逻辑，同时剔除 Agent 编排、MCP 协议、外部连接器、记忆模块、代码沙箱等非政务场景模块，仅保留四大核心骨架，打造适配政府机关单位的内网知识库问答系统。
-原项目本地地址：D:\9_Project\VsStudioProject\ragflow-main
+原项目本地地址：D:\9_Project\VsStudioProject\ragflow-main，复刻项目的架构和分层设计对标原项目
 
 ### 1.2 技术选型
 
 | 层级 | 技术 | 版本 | 说明 |
 |------|------|------|------|
-| **前端框架** | Next.js | 14（App Router） | SSR/SSG，对齐 RAGFlow 原生 React 生态 |
+| **前端框架** | Next.js | 16（App Router） | SSR/SSG，对齐 RAGFlow 原生 React 生态 |
 | **前端语言** | TypeScript | 5.x | 严格模式 |
-| **前端样式** | TailwindCSS | 3.x | 原子化 CSS，政务系统适配性好 |
+| **前端样式** | TailwindCSS | 4.x | 原子化 CSS，政务系统适配性好 |
 | **后端框架** | Flask | 3.x | Blueprint 分层路由，对齐原项目 |
 | **ORM** | SQLAlchemy | 2.x | 替代 Peewee，扩展性更强 |
 | **任务队列** | Celery | 5.x | Redis Broker，批量文档处理 |
@@ -27,16 +27,21 @@
 
 | RAGFlow 原模块 | GovRAG 对应实现 | 策略 |
 |---------------|-----------------|------|
-| `api/ragflow_server.py` | `backend/app.py`（Flask 工厂模式） | 复刻 |
-| `api/apps/auth/` | `backend/api/auth/` | 复刻+增强 |
-| `api/db/db_models.py`（Peewee） | `backend/models/`（SQLAlchemy） | 重写 |
+| `api/ragflow_server.py` | `backend/api/rag_server.py` | 复刻 |
+| `api/settings.py` | `backend/api/settings.py` | 复刻 |
+| `api/apps/auth/` | `backend/api/apps/auth/` | 复刻+增强 |
+| `api/apps/restful_apis/` | `backend/api/apps/restful_apis/` | 复刻（删 Agent/MCP 等） |
+| `api/db/db_models.py`（Peewee） | `backend/api/db/db_models.py`（SQLAlchemy） | 重写 |
+| `api/db/init_data.py` | `backend/api/db/init_data.py` | 复刻 |
+| `api/utils/` | `backend/api/utils/` | 复刻 |
 | `rag/`（RAG 核心） | `backend/rag/` | 复刻 |
 | `deepdoc/`（文档解析） | `backend/deepdoc/` | 复刻 |
+| `conf/` | `backend/conf/` | 复用+扩展 |
 | `agent/` | **删除** | — |
 | `mcp/` | **删除** | — |
 | `memory/` | **删除** | — |
-| `web/`（React + Vite） | `frontend/`（Next.js 14） | 重写 |
-| `conf/llm_factories.json` | `backend/config/llm_factories.json` | 复用+扩展 |
+| `web/`（React + Vite） | `frontend/`（Next.js 16） | 重写 |
+| `admin/`（Go CLI） | **删除** | — |
 
 ---
 
@@ -48,238 +53,165 @@ Office_RagFlow/
 ├── .env.example                          # 环境变量模板
 ├── README.md
 │
-├── frontend/                             # Next.js 14 前端
-│   ├── next.config.js
-│   ├── tailwind.config.ts
+├── frontend/                             # Next.js 16 前端（注意：不使用 src/ 目录前缀）
+│   ├── next.config.ts
 │   ├── tsconfig.json
 │   ├── package.json
-│   ├── src/
-│   │   ├── app/                          # App Router 页面
-│   │   │   ├── layout.tsx                # 根布局（三栏骨架）
-│   │   │   ├── page.tsx                  # 首页仪表盘
-│   │   │   ├── (auth)/                   # 认证路由组
-│   │   │   │   ├── login/
-│   │   │   │   │   └── page.tsx          # 登录页
-│   │   │   │   └── sso-callback/
-│   │   │   │       └── page.tsx          # SSO 回调
-│   │   │   ├── (main)/                   # 主业务路由组（需登录）
-│   │   │   │   ├── layout.tsx            # 主布局（侧边栏+内容）
-│   │   │   │   ├── datasets/
-│   │   │   │   │   ├── page.tsx          # 数据集列表
-│   │   │   │   │   └── [id]/
-│   │   │   │   │       ├── page.tsx      # 数据集详情（概览）
-│   │   │   │   │       ├── documents/    # 文档管理
-│   │   │   │   │       ├── chunks/       # 切片管理
-│   │   │   │   │       ├── testing/      # 检索测试
-│   │   │   │   │       └── settings/     # 配置
-│   │   │   │   ├── chats/
-│   │   │   │   │   ├── page.tsx          # 对话列表
-│   │   │   │   │   └── [id]/
-│   │   │   │   │       └── page.tsx      # 对话详情
-│   │   │   │   ├── searches/
-│   │   │   │   │   ├── page.tsx          # 检索列表
-│   │   │   │   │   └── [id]/
-│   │   │   │   │       └── page.tsx      # 检索详情
-│   │   │   │   ├── files/
-│   │   │   │   │   └── page.tsx          # 文件管理
-│   │   │   │   └── models/
-│   │   │   │       └── page.tsx          # 模型配置
-│   │   │   ├── (admin)/                  # 管理员路由组
-│   │   │   │   ├── layout.tsx
-│   │   │   │   ├── users/
-│   │   │   │   │   └── page.tsx          # 用户管理
-│   │   │   │   ├── roles/
-│   │   │   │   │   └── page.tsx          # 角色管理
-│   │   │   │   ├── departments/
-│   │   │   │   │   └── page.tsx          # 部门管理
-│   │   │   │   ├── audit/
-│   │   │   │   │   └── page.tsx          # 审计日志
-│   │   │   │   ├── monitoring/
-│   │   │   │   │   └── page.tsx          # 系统监控
-│   │   │   │   └── settings/
-│   │   │   │       └── page.tsx          # 系统设置
-│   │   │   └── api/                      # Next.js API Routes（BFF层）
-│   │   │       └── proxy/[...path]/
-│   │   │           └── route.ts          # 后端请求代理
-│   │   ├── components/                   # 业务组件
-│   │   │   ├── layout/
-│   │   │   │   ├── Sidebar.tsx           # 侧边导航
-│   │   │   │   ├── Header.tsx            # 顶部栏
-│   │   │   │   └── ThreeColumnLayout.tsx # 三栏布局容器
-│   │   │   ├── dataset/
-│   │   │   │   ├── DatasetCard.tsx       # 数据集卡片
-│   │   │   │   ├── DatasetUpload.tsx     # 文件上传（拖拽+进度）
-│   │   │   │   ├── DocumentList.tsx      # 文档列表（虚拟滚动）
-│   │   │   │   ├── ChunkViewer.tsx       # 切片预览
-│   │   │   │   ├── TagSelector.tsx       # 公文标签选择器
-│   │   │   │   └── SecurityLevelPicker.tsx # 涉密等级选择器
-│   │   │   ├── chat/
-│   │   │   │   ├── ChatWindow.tsx        # 对话窗口
-│   │   │   │   ├── MessageBubble.tsx     # 消息气泡
-│   │   │   │   ├── CitationCard.tsx      # 溯源引用卡片
-│   │   │   │   └── FeedbackButtons.tsx   # 满意度反馈
-│   │   │   ├── search/
-│   │   │   │   ├── SearchBar.tsx         # 检索输入
-│   │   │   │   ├── SearchResult.tsx      # 检索结果
-│   │   │   │   └── HighlightText.tsx     # 高亮标注文本
-│   │   │   ├── admin/
-│   │   │   │   ├── AuditTable.tsx        # 审计日志表格
-│   │   │   │   ├── UserForm.tsx          # 用户表单
-│   │   │   │   └── DeptTree.tsx          # 部门树形组件
-│   │   │   └── common/
-│   │   │       ├── MarkdownRenderer.tsx  # Markdown 渲染（含引用锚点）
-│   │   │       ├── FileUploader.tsx      # 通用文件上传器
-│   │   │       └── WatermarkOverlay.tsx  # 水印遮罩层
-│   │   ├── hooks/                        # 自定义 Hooks
-│   │   │   ├── useAuth.ts               # 鉴权 Hook
-│   │   │   ├── useChat.ts               # 对话 SSE 流式 Hook
-│   │   │   ├── useDataset.ts            # 数据集操作 Hook
-│   │   │   └── useAudit.ts              # 审计埋点 Hook
-│   │   ├── lib/                          # 工具库
-│   │   │   ├── api-client.ts            # Axios 封装（JWT+审计埋点）
-│   │   │   ├── auth-utils.ts            # Token 管理
-│   │   │   └── security-level.ts        # 涉密等级工具函数
-│   │   ├── stores/                       # 状态管理（Zustand）
-│   │   │   ├── auth-store.ts            # 认证状态
-│   │   │   ├── chat-store.ts            # 对话状态
-│   │   │   └── ui-store.ts              # UI 状态（侧边栏、主题）
-│   │   └── types/                        # TypeScript 类型定义
-│   │       ├── auth.ts
-│   │       ├── dataset.ts
-│   │       ├── chat.ts
-│   │       ├── document.ts
-│   │       └── admin.ts
+│   ├── app/                              # App Router 页面
+│   │   ├── layout.tsx                    # 根布局（三栏骨架）
+│   │   ├── page.tsx                      # 首页仪表盘
+│   │   ├── (auth)/                       # 认证路由组
+│   │   │   ├── login/
+│   │   │   │   └── page.tsx              # 登录页
+│   │   │   └── sso-callback/
+│   │   │       └── page.tsx              # SSO 回调
+│   │   ├── (main)/                       # 主业务路由组（需登录）
+│   │   │   ├── layout.tsx                # 主布局（侧边栏+内容）
+│   │   │   ├── datasets/
+│   │   │   │   ├── page.tsx              # 数据集列表
+│   │   │   │   └── [id]/
+│   │   │   │       ├── page.tsx          # 数据集详情（概览）
+│   │   │   │       ├── documents/        # 文档管理
+│   │   │   │       ├── chunks/           # 切片管理
+│   │   │   │       ├── testing/          # 检索测试
+│   │   │   │       └── settings/         # 配置
+│   │   │   ├── chats/
+│   │   │   │   ├── page.tsx              # 对话列表
+│   │   │   │   └── [id]/
+│   │   │   │       └── page.tsx          # 对话详情
+│   │   │   ├── searches/
+│   │   │   │   ├── page.tsx              # 检索列表
+│   │   │   │   └── [id]/
+│   │   │   │       └── page.tsx          # 检索详情
+│   │   │   ├── files/
+│   │   │   │   └── page.tsx              # 文件管理
+│   │   │   └── models/
+│   │   │       └── page.tsx              # 模型配置
+│   │   ├── (admin)/                      # 管理员路由组
+│   │   │   ├── layout.tsx
+│   │   │   ├── users/
+│   │   │   │   └── page.tsx              # 用户管理
+│   │   │   ├── roles/
+│   │   │   │   └── page.tsx              # 角色管理
+│   │   │   ├── departments/
+│   │   │   │   └── page.tsx              # 部门管理
+│   │   │   ├── audit/
+│   │   │   │   └── page.tsx              # 审计日志
+│   │   │   ├── monitoring/
+│   │   │   │   └── page.tsx              # 系统监控
+│   │   │   └── settings/
+│   │   │       └── page.tsx              # 系统设置
+│   │   └── api/                          # Next.js API Routes（BFF层）
+│   │       └── proxy/[...path]/
+│   │           └── route.ts              # 后端请求代理
+│   ├── components/                       # 业务组件
+│   │   ├── layout/
+│   │   │   ├── Sidebar.tsx               # 侧边导航
+│   │   │   ├── Header.tsx                # 顶部栏
+│   │   │   └── ThreeColumnLayout.tsx     # 三栏布局容器
+│   │   ├── dataset/
+│   │   │   ├── DatasetCard.tsx           # 数据集卡片
+│   │   │   ├── DatasetUpload.tsx         # 文件上传（拖拽+进度）
+│   │   │   ├── DocumentList.tsx          # 文档列表（虚拟滚动）
+│   │   │   ├── ChunkViewer.tsx           # 切片预览
+│   │   │   ├── TagSelector.tsx           # 公文标签选择器
+│   │   │   └── SecurityLevelPicker.tsx   # 涉密等级选择器
+│   │   ├── chat/
+│   │   │   ├── ChatWindow.tsx            # 对话窗口
+│   │   │   ├── MessageBubble.tsx         # 消息气泡
+│   │   │   ├── CitationCard.tsx          # 溯源引用卡片
+│   │   │   └── FeedbackButtons.tsx       # 满意度反馈
+│   │   ├── search/
+│   │   │   ├── SearchBar.tsx             # 检索输入
+│   │   │   ├── SearchResult.tsx          # 检索结果
+│   │   │   └── HighlightText.tsx         # 高亮标注文本
+│   │   ├── admin/
+│   │   │   ├── AuditTable.tsx            # 审计日志表格
+│   │   │   ├── UserForm.tsx              # 用户表单
+│   │   │   └── DeptTree.tsx              # 部门树形组件
+│   │   └── common/
+│   │       ├── MarkdownRenderer.tsx      # Markdown 渲染（含引用锚点）
+│   │       ├── FileUploader.tsx          # 通用文件上传器
+│   │       └── WatermarkOverlay.tsx      # 水印遮罩层
+│   ├── hooks/                            # 自定义 Hooks
+│   │   ├── useAuth.ts                    # 鉴权 Hook
+│   │   ├── useChat.ts                    # 对话 SSE 流式 Hook
+│   │   ├── useDataset.ts                 # 数据集操作 Hook
+│   │   └── useAudit.ts                   # 审计埋点 Hook
+│   ├── lib/                              # 工具库
+│   │   ├── api-client.ts                # Axios 封装（JWT+审计埋点）
+│   │   ├── auth-utils.ts                # Token 管理
+│   │   └── security-level.ts            # 涉密等级工具函数
+│   ├── stores/                           # 状态管理（Zustand）
+│   │   ├── auth-store.ts                # 认证状态
+│   │   ├── chat-store.ts                # 对话状态
+│   │   └── ui-store.ts                  # UI 状态（侧边栏、主题）
+│   └── types/                            # TypeScript 类型定义
+│       ├── auth.ts
+│       ├── dataset.ts
+│       ├── chat.ts
+│       ├── document.ts
+│       └── admin.ts
 │
-├── backend/                              # Flask 后端
-│   ├── app.py                            # Flask 应用工厂入口
-│   ├── config.py                         # 配置管理
-│   ├── celery_app.py                     # Celery 实例
-│   ├── tasks/                            # Celery 异步任务
-│   │   ├── __init__.py
-│   │   ├── document_tasks.py             # 文档解析+向量化任务
-│   │   └── maintenance_tasks.py          # 定期清理任务
-│   ├── api/                              # API 路由层（Flask Blueprint）
-│   │   ├── __init__.py                   # Blueprint 注册中心
-│   │   ├── auth/
-│   │   │   ├── __init__.py               # auth_bp
-│   │   │   ├── login.py                  # 登录、SSO 回调
-│   │   │   └── middleware.py             # JWT 鉴权装饰器
-│   │   ├── v1/                           # /api/v1/*
+├── backend/                              # 后端（对齐 RAGFlow api/ + rag/ + deepdoc/）
+│   ├── run.py                            # 开发启动入口
+│   ├── .env                              # 环境变量（本地配置）
+│   ├── .env.example                      # 环境变量模板
+│   ├── requirements.txt                  # Python 依赖
+│   │
+│   ├── api/                              # ← 对齐 RAGFlow api/
+│   │   ├── __init__.py                   # create_app() 工厂 + 健康检查
+│   │   ├── rag_server.py                 # 生产入口（← ragflow_server.py）
+│   │   ├── settings.py                   # 全局配置（← settings.py）
+│   │   ├── apps/
 │   │   │   ├── __init__.py
-│   │   │   ├── dataset.py               # 数据集 CRUD
-│   │   │   ├── document.py              # 文档上传/管理
-│   │   │   ├── chunk.py                 # 切片管理
-│   │   │   ├── chat.py                  # 对话/问答
-│   │   │   ├── search.py               # 检索
-│   │   │   ├── file.py                  # 文件管理
-│   │   │   ├── model.py                 # 模型配置
-│   │   │   ├── user.py                  # 用户信息
-│   │   │   └── tenant.py               # 租户管理
-│   │   └── admin/                        # /api/v1/admin/*
+│   │   │   ├── auth/
+│   │   │   │   ├── __init__.py           # auth_bp Blueprint
+│   │   │   │   ├── login.py              # 登录、SSO 回调
+│   │   │   │   └── middleware.py         # require_auth/require_admin 装饰器
+│   │   │   ├── restful_apis/             # ← 对齐 RAGFlow restful_apis/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── _generation_params.py # 生成参数工具
+│   │   │   │   ├── dataset_api.py        # 数据集 CRUD
+│   │   │   │   ├── document_api.py       # 文档上传/管理
+│   │   │   │   ├── chunk_api.py          # 切片管理
+│   │   │   │   ├── chat_api.py           # 对话/问答
+│   │   │   │   ├── search_api.py         # 检索
+│   │   │   │   ├── file_api.py           # 文件管理
+│   │   │   │   ├── user_api.py           # 用户信息
+│   │   │   │   ├── tenant_api.py         # 租户管理
+│   │   │   │   ├── system_api.py         # 系统配置
+│   │   │   │   ├── stats_api.py          # 使用统计
+│   │   │   │   ├── models_api.py         # 模型配置
+│   │   │   │   ├── provider_api.py       # 模型厂商管理
+│   │   │   │   └── audit_api.py          # 审计日志（政务新增）
+│   │   │   └── services/                 # 业务服务层
+│   │   ├── db/                           # ← 对齐 RAGFlow api/db/
+│   │   │   ├── __init__.py
+│   │   │   ├── db_models.py              # 全部 SQLAlchemy 模型（单体，← db_models.py）
+│   │   │   ├── db_utils.py               # 数据库工具
+│   │   │   └── init_data.py              # 种子数据（← init_data.py）
+│   │   └── utils/                        # ← 对齐 RAGFlow api/utils/
 │   │       ├── __init__.py
-│   │       ├── users.py                  # 用户管理
-│   │       ├── roles.py                  # 角色权限
-│   │       ├── departments.py            # 部门管理
-│   │       ├── audit.py                  # 审计日志
-│   │       ├── monitoring.py             # 系统监控
-│   │       ├── stats.py                  # 使用统计
-│   │       └── system.py                 # 系统配置
-│   ├── services/                         # 业务服务层
-│   │   ├── __init__.py
-│   │   ├── auth_service.py               # 认证+租户服务
-│   │   ├── dataset_service.py            # 数据集服务
-│   │   ├── document_service.py           # 文档解析+切块服务
-│   │   ├── chat_service.py               # RAG 问答服务
-│   │   ├── search_service.py             # 检索服务
-│   │   ├── model_service.py              # 模型配置服务
-│   │   ├── file_service.py               # 文件存储服务
-│   │   └── audit_service.py              # 审计日志服务
-│   ├── rag/                              # RAG 核心引擎（复刻 RAGFlow rag/）
-│   │   ├── __init__.py
-│   │   ├── retrieval/                    # 检索模块
-│   │   │   ├── __init__.py
-│   │   │   ├── vector_search.py          # 向量检索（Infinity）
-│   │   │   ├── keyword_search.py         # 关键词检索（BM25）
-│   │   │   ├── hybrid_search.py          # 混合检索+RRF 融合
-│   │   │   └── reranker.py               # 重排序（BGE-Reranker）
-│   │   ├── generation/                   # 生成模块
-│   │   │   ├── __init__.py
-│   │   │   ├── prompt_builder.py         # Prompt 模板构建
-│   │   │   ├── context_assembler.py      # 上下文拼接（溯源引用）
-│   │   │   └── llm_client.py             # LLM 调用客户端
+│   │       ├── jwt_utils.py              # JWT 签发/校验
+│   │       ├── response.py               # 统一 JSON 响应
+│   │       ├── s3_client.py              # MinIO S3 客户端
+│   │       └── infinity_client.py        # Infinity 向量库客户端
+│   │
+│   ├── rag/                              # ← 对齐 RAGFlow rag/（RAG 核心引擎）
+│   │   ├── retrieval/                    # 多路召回
+│   │   ├── generation/                   # LLM 生成
 │   │   ├── pipeline/                     # LCEL 流水线
-│   │   │   ├── __init__.py
-│   │   │   ├── rag_pipeline.py           # RAG 主流水线
-│   │   │   └── steps.py                  # 流水线步骤定义
-│   │   ├── nlp/                          # NLP 工具
-│   │   │   ├── __init__.py
-│   │   │   ├── tokenizer.py              # 分词器
-│   │   │   └── text_cleaner.py           # 文本清洗
-│   │   └── prompts/                      # Prompt 模板（JSON）
-│   │       ├── qa_prompt.json
-│   │       ├── summary_prompt.json
-│   │       └── system_prompt.json
-│   ├── deepdoc/                          # 文档解析引擎（复刻 RAGFlow deepdoc/）
-│   │   ├── __init__.py
-│   │   ├── parser/
-│   │   │   ├── __init__.py
-│   │   │   ├── pdf_parser.py             # PDF 解析
-│   │   │   ├── word_parser.py            # Word 解析
-│   │   │   ├── excel_parser.py           # Excel 解析
-│   │   │   ├── image_parser.py           # 图片 OCR 解析
-│   │   │   ├── ofd_parser.py             # OFD 版式文档解析
-│   │   │   ├── wps_parser.py             # WPS 格式解析
-│   │   │   └── markdown_parser.py        # Markdown 解析
-│   │   ├── chunker/                      # 切块模块
-│   │   │   ├── __init__.py
-│   │   │   ├── naive_chunker.py          # 固定大小切块
-│   │   │   ├── semantic_chunker.py       # 语义切块
-│   │   │   └── document_chunker.py       # 公文结构化切块
-│   │   ├── ocr/                          # OCR 模块
-│   │   │   ├── __init__.py
-│   │   │   ├── paddleocr_engine.py       # PaddleOCR
-│   │   │   └── tesseract_engine.py       # Tesseract
-│   │   └── table/                        # 表格提取
-│   │       ├── __init__.py
-│   │       └── table_extractor.py
-│   ├── models/                           # SQLAlchemy 数据模型
-│   │   ├── __init__.py
-│   │   ├── base.py                       # Base Model
-│   │   ├── tenant.py                     # 租户
-│   │   ├── user.py                       # 用户
-│   │   ├── role.py                       # 角色
-│   │   ├── department.py                 # 部门
-│   │   ├── dataset.py                    # 数据集
-│   │   ├── document.py                   # 文档
-│   │   ├── chunk.py                      # 切片
-│   │   ├── chat.py                       # 对话
-│   │   ├── chat_message.py              # 聊天消息
-│   │   ├── file.py                       # 文件
-│   │   ├── tag.py                        # 标签
-│   │   ├── model_config.py              # 模型配置
-│   │   ├── audit_log.py                 # 审计日志
-│   │   └── qa_record.py                 # 问答记录
-│   ├── migrations/                       # Alembic 数据库迁移
-│   │   ├── alembic.ini
-│   │   ├── env.py
-│   │   └── versions/
-│   ├── middleware/                        # 中间件
-│   │   ├── __init__.py
-│   │   ├── auth_middleware.py            # JWT + API Key 鉴权
-│   │   ├── audit_middleware.py           # 操作审计埋点
-│   │   ├── rate_limit_middleware.py      # 频率限制
-│   │   └── security_level_middleware.py  # 涉密等级拦截
-│   ├── utils/                            # 工具
-│   │   ├── __init__.py
-│   │   ├── jwt_utils.py                  # JWT 生成/校验
-│   │   ├── crypto_utils.py               # 加密工具
-│   │   ├── s3_client.py                  # MinIO S3 客户端
-│   │   ├── infinity_client.py            # Infinity 向量库客户端
-│   │   └── response.py                   # 统一响应格式
-│   └── config/                           # 配置文件
-│       ├── llm_factories.json            # LLM 厂商配置
-│       ├── all_models.json               # 模型目录
-│       └── system_settings.json          # 系统设置
+│   │   └── nlp/                          # NLP 工具
+│   ├── deepdoc/                          # ← 对齐 RAGFlow deepdoc/（文档解析）
+│   │   ├── parser/                       # PDF/Word/Excel/OFD 解析
+│   │   ├── chunker/                      # 智能切块
+│   │   └── ocr/                          # OCR 识别
+│   ├── conf/                             # ← 对齐 RAGFlow conf/（配置文件）
+│   │   ├── llm_factories.json            # LLM 厂商配置
+│   │   ├── all_models.json               # 模型目录
+│   │   └── system_settings.json          # 系统设置
+│   └── migrations/                       # Alembic 数据库迁移
 │
 └── scripts/                              # 运维脚本
     ├── init.sql                          # 数据库初始化（直接在 MySQL 中执行）
@@ -306,23 +238,23 @@ Office_RagFlow/
 
 #### 2.1.2 目录/包命名 —— 全小写，无分隔符
 
-参照 Go package 命名规则：`all lowercase, no underscores, no hyphens`。
+全小写，无下划线，无连字符。
 
 ```
 后端 Python 包目录：
-  ✅ backend/services/          ✅ backend/models/
+  ✅ backend/api/apps/          ✅ backend/api/db/
   ✅ backend/rag/retrieval/     ✅ backend/deepdoc/parser/
-  ❌ backend/celery_tasks/      ❌ backend/user-services/
+  ❌ backend/my_services/       ❌ backend/user-services/
 
 前端 TypeScript 目录：
-  ✅ frontend/src/components/   ✅ frontend/src/hooks/
-  ✅ frontend/src/app/(main)/   ✅ frontend/src/stores/
-  ❌ frontend/src/myHooks/      ❌ frontend/src/UserComponents/
+  ✅ frontend/components/   ✅ frontend/hooks/
+  ✅ frontend/app/(main)/   ✅ frontend/stores/
+  ❌ frontend/myHooks/      ❌ frontend/UserComponents/
 ```
 
 #### 2.1.3 文件命名 —— 全小写，下划线分隔
 
-参照 Go file 命名规则：`all lowercase, underscore separated`。
+全小写，下划线分隔（Python）或连字符分隔（TypeScript），详见下表。
 
 | 技术栈 | 规则 | 示例 |
 |--------|------|------|
@@ -365,7 +297,7 @@ Office_RagFlow/
 
 #### 2.1.8 缩写词保持统一大小写
 
-参照 Go 缩写词规则：当名称中包含标准缩写词时，该缩写词保持全大写或全小写（取决于位置）。
+当名称中包含标准缩写词时，该缩写词保持全大写或全小写（取决于位置）。
 
 ```
 Python：
@@ -460,16 +392,16 @@ status VARCHAR(50) CHECK (role IN ('Pending', 'PARSING', 'ready'))
 
 ---
 
-## 三、前端架构详设（Next.js 14 + App Router）
+## 三、前端架构详设（Next.js 16 + App Router）
 
 ### 3.1 前端技术栈
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Next.js | 14.x | SSR/SSG 框架，App Router |
-| React | 18.x | UI 组件 |
+| Next.js | 16.x | SSR/SSG 框架，App Router |
+| React | 19.x | UI 组件 |
 | TypeScript | 5.x | 类型安全 |
-| TailwindCSS | 3.x | 原子化样式 |
+| TailwindCSS | 4.x | 原子化样式 |
 | Zustand | 4.x | 轻量状态管理 |
 | Axios | 1.x | HTTP 请求 |
 | React-Markdown | 9.x | Markdown 渲染 |
@@ -535,7 +467,7 @@ status VARCHAR(50) CHECK (role IN ('Pending', 'PARSING', 'ready'))
 #### 3.4.1 请求封装（api-client.ts）
 
 ```typescript
-// frontend/src/lib/api-client.ts
+// frontend/lib/api-client.ts
 
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/auth-store';
@@ -580,7 +512,7 @@ export default apiClient;
 #### 3.4.2 涉密等级选择器（SecurityLevelPicker.tsx）
 
 ```typescript
-// frontend/src/components/dataset/SecurityLevelPicker.tsx
+// frontend/components/dataset/SecurityLevelPicker.tsx
 
 'use client';
 
@@ -616,7 +548,7 @@ export function SecurityLevelPicker({ value, maxLevel, onChange }: SecurityLevel
 #### 3.4.3 溯源引用卡片（CitationCard.tsx）
 
 ```typescript
-// frontend/src/components/chat/CitationCard.tsx
+// frontend/components/chat/CitationCard.tsx
 
 'use client';
 
@@ -670,7 +602,7 @@ export function CitationCard({ citations, onNavigate }: CitationCardProps) {
 #### 3.4.4 对话窗口 + SSE 流式输出
 
 ```typescript
-// frontend/src/hooks/useChat.ts
+// frontend/hooks/useChat.ts
 
 import { useState, useCallback } from 'react';
 import { useChatStore } from '@/stores/chat-store';
@@ -732,7 +664,7 @@ export function useChat(chatId: string) {
 ### 3.5 状态管理（Zustand）
 
 ```typescript
-// frontend/src/stores/auth-store.ts
+// frontend/stores/auth-store.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -780,35 +712,27 @@ export const useAuthStore = create<AuthState>()(
 ### 4.1 应用工厂
 
 ```python
-# backend/app.py
+# backend/api/__init__.py
 
 from flask import Flask
 from flask_cors import CORS
 from flask_migrate import Migrate
 
-from backend.config import get_config
-from backend.models.base import db
+from backend.api.settings import Settings
+from backend.api.db.db_models import db
 from backend.api import register_blueprints
-from backend.middleware import register_middlewares
 
 
-def create_app(config_name: str = None) -> Flask:
+def create_app() -> Flask:
     app = Flask(__name__)
-    config = get_config(config_name)
-    app.config.from_object(config)
+    app.config.from_object(Settings)
 
-    # 数据库
     db.init_app(app)
     Migrate(app, db)
 
-    # 跨域（开发环境）
-    CORS(app, origins=config.CORS_ORIGINS, supports_credentials=True)
+    CORS(app, origins=["http://localhost:3000"], supports_credentials=True)
 
-    # 注册 Blueprint
     register_blueprints(app)
-
-    # 注册中间件
-    register_middlewares(app)
 
     return app
 ```
@@ -868,15 +792,16 @@ def create_app(config_name: str = None) -> Flask:
 #### 鉴权中间件实现
 
 ```python
-# backend/middleware/auth_middleware.py
+# backend/api/apps/auth/middleware.py
 
 import functools
 import jwt
-from flask import request, g, jsonify, current_app
+from flask import request, g
 from datetime import datetime, timezone
 
-from backend.models.user import User
-from backend.utils.jwt_utils import decode_token, is_token_blacklisted
+from api.db.db_models import User
+from api.utils.jwt_utils import decode_token
+from api.utils.response import error
 
 
 class AuthError(Exception):
@@ -892,9 +817,6 @@ def require_auth(f):
         token = _extract_token()
         if not token:
             raise AuthError("缺少认证令牌", 401)
-
-        if is_token_blacklisted(token):
-            raise AuthError("令牌已失效", 401)
 
         try:
             payload = decode_token(token)
@@ -955,12 +877,25 @@ def _extract_token() -> str | None:
 #### 基类
 
 ```python
-# backend/models/base.py
+# backend/api/db/db_models.py（基类部分）
 
 import uuid
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import TypeDecorator, CHAR
+
+
+class GUID(TypeDecorator):
+    """MySQL CHAR(36) ↔ Python UUID 自动转换"""
+    impl = CHAR(36)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return str(value) if value else None
+
+    def process_result_value(self, value, dialect):
+        return uuid.UUID(value) if value else None
+
 
 db = SQLAlchemy()
 
@@ -968,42 +903,46 @@ db = SQLAlchemy()
 class BaseModel(db.Model):
     __abstract__ = True
 
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        result = {}
+        for c in self.__table__.columns:
+            value = getattr(self, c.name)
+            if isinstance(value, uuid.UUID):
+                value = str(value)
+            if c.name == "password_hash":
+                continue
+            result[c.name] = value
+        return result
 
 
 class TenantModel(BaseModel):
     __abstract__ = True
-
-    tenant_id = db.Column(UUID(as_uuid=True), nullable=False, index=True)
+    tenant_id = db.Column(GUID(), nullable=False, index=True)
 ```
 
 #### 核心模型
 
 ```python
-# backend/models/user.py
-from backend.models.base import db, TenantModel
-from sqlalchemy.dialects.postgresql import UUID
-import uuid
+# backend/api/db/db_models.py（User 模型部分）
 
 class User(TenantModel):
     __tablename__ = 'users'
 
     username = db.Column(db.String(100), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    real_name = db.Column(db.String(100))                      # 真实姓名
+    real_name = db.Column(db.String(100))
     email = db.Column(db.String(255))
     phone = db.Column(db.String(20))
-    department_id = db.Column(UUID(as_uuid=True), nullable=True)
-    role = db.Column(db.String(50), default='user')            # super_admin/admin/user/auditor
-    security_level = db.Column(db.Integer, default=0)          # 0-4
-    job_title = db.Column(db.String(100))                       # 职务
-    sso_uid = db.Column(db.String(255), nullable=True)         # SSO统一认证ID
+    department_id = db.Column(GUID(), nullable=True)
+    role = db.Column(db.String(50), default='user')
+    security_level = db.Column(db.Integer, default=0)
+    job_title = db.Column(db.String(100))
+    sso_uid = db.Column(db.String(255), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     last_login_at = db.Column(db.DateTime(timezone=True))
     password_changed_at = db.Column(db.DateTime(timezone=True))
@@ -1011,41 +950,39 @@ class User(TenantModel):
     locked_until = db.Column(db.DateTime(timezone=True), nullable=True)
 
 
-# backend/models/document.py
 class Document(TenantModel):
     __tablename__ = 'documents'
 
-    dataset_id = db.Column(UUID(as_uuid=True), nullable=False, index=True)
+    dataset_id = db.Column(GUID(), nullable=False, index=True)
     name = db.Column(db.String(500), nullable=False)
-    file_type = db.Column(db.String(50))                        # pdf/word/excel/ofd/wps
+    file_type = db.Column(db.String(50))
     file_size = db.Column(db.BigInteger, default=0)
-    file_path = db.Column(db.String(1000))                      # MinIO 对象路径
-    status = db.Column(db.String(50), default='pending')        # pending/parsing/ready/error
+    file_path = db.Column(db.String(1000))
+    status = db.Column(db.String(50), default='pending')
     chunk_count = db.Column(db.Integer, default=0)
     token_count = db.Column(db.Integer, default=0)
-    parse_config = db.Column(db.JSON)                           # 解析配置（切块大小、重叠等）
+    parse_config = db.Column(db.JSON)
 
     # 政务字段
-    security_level = db.Column(db.Integer, default=0)           # 涉密等级
-    doc_type = db.Column(db.String(50))                         # 公文类型：通知/报告/批复/函
-    doc_year = db.Column(db.String(10))                         # 年度
-    issuing_org = db.Column(db.String(255))                     # 发文机关
-    doc_number = db.Column(db.String(100))                      # 文号
-    topic_words = db.Column(db.String(500))                     # 主题词
+    security_level = db.Column(db.Integer, default=0)
+    doc_type = db.Column(db.String(50))
+    doc_year = db.Column(db.String(10))
+    issuing_org = db.Column(db.String(255))
+    doc_number = db.Column(db.String(100))
+    topic_words = db.Column(db.String(500))
 
-    uploaded_by = db.Column(UUID(as_uuid=True))
+    uploaded_by = db.Column(GUID())
 
 
-# backend/models/audit_log.py
 class AuditLog(BaseModel):
     __tablename__ = 'audit_logs'
 
-    tenant_id = db.Column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id = db.Column(UUID(as_uuid=True), nullable=False, index=True)
+    tenant_id = db.Column(GUID(), nullable=False, index=True)
+    user_id = db.Column(GUID(), nullable=False, index=True)
     username = db.Column(db.String(100))
-    action = db.Column(db.String(100), nullable=False, index=True)  # login/logout/search/chat/upload/download/delete
-    resource_type = db.Column(db.String(100))                       # document/dataset/chat/user
-    resource_id = db.Column(UUID(as_uuid=True), nullable=True)
+    action = db.Column(db.String(100), nullable=False, index=True)
+    resource_type = db.Column(db.String(100))
+    resource_id = db.Column(GUID(), nullable=True)
     resource_name = db.Column(db.String(500))
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.Text)
@@ -1080,13 +1017,12 @@ document_service.py 文档处理主流程：
 
 ```python
 # backend/rag/pipeline/rag_pipeline.py
-# LCEL 风格 RAG 流水线
 
 from dataclasses import dataclass, field
 from typing import List, AsyncIterator
-from backend.rag.retrieval.hybrid_search import HybridSearcher
-from backend.rag.generation.context_assembler import ContextAssembler
-from backend.rag.generation.llm_client import LLMClient
+from rag.retrieval.hybrid_search import HybridSearcher
+from rag.generation.context_assembler import ContextAssembler
+from rag.generation.llm_client import LLMClient
 
 
 @dataclass
@@ -1179,9 +1115,9 @@ class RAGPipeline:
 ```python
 # backend/rag/retrieval/hybrid_search.py
 
-from backend.utils.infinity_client import InfinityClient
-from backend.models.document import Document
-from backend.models.chunk import Chunk
+from api.utils.infinity_client import InfinityClient
+from api.db.db_models import Document
+from api.db.db_models import Chunk
 from sqlalchemy import and_
 
 
@@ -1215,7 +1151,7 @@ class HybridSearcher:
     def _keyword_search(self, query: str, dataset_ids: list[str],
                         security_level: int, top_k: int) -> list[dict]:
         """BM25 关键词检索 —— PostgreSQL tsquery"""
-        from backend.models.base import db
+        from api.db.db_models import db
         from sqlalchemy import text
 
         ts_query = ' | '.join(query.split())
@@ -1269,7 +1205,7 @@ class HybridSearcher:
 import httpx
 import json
 from typing import AsyncIterator
-from backend.config.llm_factories import get_model_config
+from conf.llm_factories import get_model_config
 
 
 class LLMClient:
@@ -1422,7 +1358,7 @@ class ContextAssembler:
 ### 6.1 统一响应格式
 
 ```python
-# backend/utils/response.py
+# backend/api/utils/response.py
 
 from flask import jsonify
 from typing import Any
@@ -1559,12 +1495,12 @@ GET    /health                健康检查                  → {status, version
 ### 6.3 接口示例
 
 ```python
-# backend/api/v1/chat.py
+# backend/api/apps/restful_apis/chat_api.py
 # SSE 流式对话接口
 
 from flask import Blueprint, request, Response, g, stream_with_context
-from backend.middleware.auth_middleware import require_auth
-from backend.services.chat_service import ChatService
+from api.apps.auth.middleware import require_auth
+from api.apps.services.chat_service import ChatService
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -1643,10 +1579,10 @@ pip install -r requirements.txt
 python scripts/init_db.py
 
 # 3. 启动 Flask 后端（终端 1）
-python app.py
+python run.py
 
 # 4. 启动 Celery Worker（终端 2）
-celery -A celery_app worker -l info -P solo
+celery -A api.celery_app worker -l info -P solo
 
 # 5. 启动 Next.js 前端（终端 3）
 cd ../frontend
@@ -1670,13 +1606,13 @@ npm run dev
 ```batch
 :: scripts/start_backend.bat
 cd /d %~dp0..\backend
-python app.py
+python run.py
 ```
 
 ```batch
 :: scripts/start_worker.bat
 cd /d %~dp0..\backend
-celery -A celery_app worker -l info -P solo
+celery -A api.celery_app worker -l info -P solo
 ```
 
 ```batch
@@ -1716,7 +1652,7 @@ npm run dev
 ```
 Phase 1: 基础骨架（4周）
 ────────────────────────────────────────────────────────
-W1  ├─ 项目初始化：Next.js 14 脚手架 + Flask 工厂模式 + 本地服务启动
+W1  ├─ 项目初始化：Next.js 16 脚手架 + Flask 工厂模式 + 本地服务启动
     ├─ 数据库：SQLAlchemy 模型定义 + Alembic 迁移 + init.sql
     └─ 基础设施：Redis / MinIO / Infinity / Nginx 配置
 
@@ -1849,7 +1785,7 @@ NEXT_PUBLIC_SSO_ENABLED=false
 | ORM | SQLAlchemy 2.x | 替代 Peewee，社区更大，Alembic 迁移体系成熟，国产数据库 dialect 生态好 |
 | 向量库 | Infinity | 对齐 RAGFlow 原生技术栈，性能优异，无外部依赖 |
 | 对象存储 | MinIO | 与 RAGFlow 一致，S3 兼容，内网离线部署友好 |
-| 前端框架 | Next.js 14 App Router | 对齐 RAGFlow React 生态，SSR 适配国产浏览器 SEO 需求 |
+| 前端框架 | Next.js 16 App Router | 对齐 RAGFlow React 生态，SSR 适配国产浏览器 SEO 需求 |
 | 状态管理 | Zustand | 轻量，无 Provider 嵌套，与 RAGFlow 原生一致 |
 | 异步任务 | Celery + Redis | 对齐 RAGFlow 架构，文档处理流水线成熟方案 |
 | 国产数据库 | MySQL优先|SQLAlchemy 无适配成本，已有生产部署案例 |
@@ -1858,14 +1794,14 @@ NEXT_PUBLIC_SSO_ENABLED=false
 
 | RAGFlow 源文件 | GovRAG 复刻位置 | 复刻内容 |
 |---------------|----------------|---------|
-| `api/apps/auth/` 鉴权装饰器 | `backend/middleware/auth_middleware.py` | 三层鉴权：JWT 签发/校验 + Admin + 租户隔离 |
+| `api/apps/auth/` 鉴权装饰器 | `backend/api/apps/auth/middleware.py` | 三层鉴权：JWT 签发/校验 + Admin + 租户隔离 |
 | `rag/retrieval/` 检索模块 | `backend/rag/retrieval/` | 混合检索 pipeline：向量 + BM25 + RRF + Reranker |
 | `rag/prompts/` Prompt 模板 | `backend/rag/prompts/` | QA/Summary/System prompt JSON |
 | `rag/llm/` LLM 调用 | `backend/rag/generation/llm_client.py` | 多厂商统一客户端 + SSE 流式 |
 | `deepdoc/parser/` 文档解析 | `backend/deepdoc/parser/` | PDF/Word/Excel 解析器核心逻辑 |
-| `conf/llm_factories.json` | `backend/config/llm_factories.json` | 模型厂商配置（扩展国产模型） |
-| `api/apps/restful_apis/chat_api.py` | `backend/api/v1/chat.py` | SSE 流式对话接口 |
-| `api/apps/restful_apis/dataset_api.py` | `backend/api/v1/dataset.py` | 数据集 CRUD |
-| `api/apps/restful_apis/document_api.py` | `backend/api/v1/document.py` | 文档上传/管理 |
-| `web/src/pages/next-chats/` | `frontend/src/app/(main)/chats/` | 对话窗口 + 溯源引用 UI |
-| `web/src/pages/dataset/` | `frontend/src/app/(main)/datasets/` | 知识库三栏布局 |
+| `conf/llm_factories.json` | `backend/conf/llm_factories.json` | 模型厂商配置（扩展国产模型） |
+| `api/apps/restful_apis/chat_api.py` | `backend/api/apps/restful_apis/chat_api.py` | SSE 流式对话接口 |
+| `api/apps/restful_apis/dataset_api.py` | `backend/api/apps/restful_apis/dataset_api.py` | 数据集 CRUD |
+| `api/apps/restful_apis/document_api.py` | `backend/api/apps/restful_apis/document_api.py` | 文档上传/管理 |
+| `web/src/pages/next-chats/` | `frontend/app/(main)/chats/` | 对话窗口 + 溯源引用 UI |
+| `web/src/pages/dataset/` | `frontend/app/(main)/datasets/` | 知识库三栏布局 |
