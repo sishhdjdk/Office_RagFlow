@@ -1,3 +1,4 @@
+
 # 测试1
 # from deepdoc.parser.pdf_parser import PdfParser
 # sections = PdfParser.parse("E:\\文件档案\\001-文献管理\\900-考研\\大学生数学竞赛习题辅导.pdf")
@@ -20,16 +21,22 @@
 # print("前10维向量值：", np.round(vec[:10],4))
 
 #测试4
-from api.utils.vector_store import VectorStore
-import numpy as np
+# from api.utils.vector_store import VectorStore
+# import numpy as np
 
-vs = VectorStore("test1.index", dim=3)#role: 创建一个 3 维向量的 FAISS 索引
-# 写入 3 个向量，ID 分别是 a, b, c
-vs.add(np.array([[1,0,0], [0,1,0], [0,0,1]]), ["a", "b", "c"])
-print("ntotal after add:", vs.count())         # ← 加这行
-print("_id_list:", vs._id_list)                # ← 加这行
-vs.save()
+# vs = VectorStore("test1.index", dim=3)#role: 创建一个 3 维向量的 FAISS 索引
+# # 写入 3 个向量，ID 分别是 a, b, c
+# vs.add(np.array([[1,0,0], [0,1,0], [0,0,1]]), ["a", "b", "c"])
+# print("ntotal after add:", vs.count())         # ← 加这行
+# print("_id_list:", vs._id_list)                # ← 加这行
+# vs.save()
 
-# 检索最接近 [0.9, 0.1, 0] 的 2 个向量
-results = vs.search(np.array([0.9, 0.1, 0]), top_k=2)
-print(results)  # [("a", 小距离), ("b", 中距离)]
+# # 检索最接近 [0.9, 0.1, 0] 的 2 个向量
+# results = vs.search(np.array([0.9, 0.1, 0]), top_k=2)
+# print(results)  # [("a", 小距离), ("b", 中距离)]
+
+#测试5
+# from rag.llm.chat_model import ChatModel
+# model = ChatModel()
+# for token in model.stream_chat([{"role":"user","content":"你好"}]):
+#     print(token, end="", flush=True)

@@ -164,15 +164,28 @@ class Chunk(TenantModel):
     token_count = db.Column(db.Integer, default=0)
     chunk_index = db.Column(db.Integer, nullable=False)
 
+# ==================== LLM 模型配置表 ====================
+
+class TenantLLM(BaseModel):
+    __tablename__ = "tenant_llm"
+
+    tenant_id = db.Column(GUID(), nullable=False, index=True)
+    llm_name = db.Column(db.String(255), nullable=False)
+    model_type = db.Column(db.String(50), default="chat")
+    api_key = db.Column(db.String(500))
+    api_base = db.Column(db.String(500))
+
+
 # ==================== 对话表 ====================
 class Dialog(TenantModel):
     __tablename__ = "dialog"
     
+    user_id = db.Column(GUID(), nullable=True)
     name = db.Column(db.String(255), nullable=True, index=True)
     description = db.Column(db.Text, nullable=True)
     icon = db.Column(db.Text, nullable=True)
     language = db.Column(db.String(32), nullable=True, default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English", index=True)
-    llm_id = db.Column(db.String(128), nullable=False)
+    llm_id = db.Column(db.String(128), nullable=True)
     tenant_llm_id = db.Column(GUID(), nullable=True, index=True)
 
     llm_setting = db.Column(db.JSON, nullable=False, default=lambda: {"temperature": 0.1, "top_p": 0.3, "frequency_penalty": 0.7, "presence_penalty": 0.4, "max_tokens": 512})
@@ -192,7 +205,7 @@ class Dialog(TenantModel):
 
     do_refer = db.Column(db.String(1), nullable=False, default="1")
 
-    rerank_id = db.Column(db.String(128), nullable=False)
+    rerank_id = db.Column(db.String(128), nullable=True)
     tenant_rerank_id = db.Column(GUID(), nullable=True, index=True)
     kb_ids = db.Column(db.JSON, nullable=False, default=list)
     status = db.Column(db.String(1), nullable=True, default="1", index=True)

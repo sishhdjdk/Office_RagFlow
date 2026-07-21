@@ -139,5 +139,39 @@ def logout():
 @login_required
 def get_current_user():
     """获取当前登录用户信息"""
-    # 前端用它恢复会话和初始化用户态。
     return success(g.current_user.to_dict())
+
+
+@auth_bp.route("/profile", methods=["PUT"])
+@login_required
+def update_profile():
+    """更新个人信息"""
+    data = request.get_json(silent=True) or {}
+    user = g.current_user
+    for field in ("real_name", "email", "phone"):
+        if field in data:
+            setattr(user, field, data[field] or None)
+    db.session.commit()
+    return success(user.to_dict())
+
+
+@auth_bp.route("/password", methods=["PUT"])
+@login_required
+def change_password():
+    """修改密码"""
+    data = request.get_json(silent=True) or {}
+    old_pw = data.get("old_password", "")
+    new_pw = data.get("new_password", "").strip()
+
+    if not old_pw or not new_pw:
+        return error("请填写当前密码和新密码")
+    if len(new_pw) < 6:
+        return error("新密码长度不能少于 6 位")
+
+    user = g.current_user
+    if not user.verify_password(old_pw):
+        return error("当前密码错误")
+
+    user.password_hash = User.hash_password(new_pw)
+    db.session.commit()
+    return success(None, "密码修改成功")

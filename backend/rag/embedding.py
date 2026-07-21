@@ -1,9 +1,8 @@
-# rag/embedding.py
+import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import torch
 from sentence_transformers import SentenceTransformer
 import numpy as np
-import os
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 class EmbeddingModel:
     _model = None
 
