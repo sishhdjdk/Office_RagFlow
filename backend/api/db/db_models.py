@@ -3,6 +3,7 @@
 这里定义租户、用户、数据集、文件、文档等实体，是后端业务链路的事实来源。
 """
 
+import os
 import uuid
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
@@ -152,3 +153,57 @@ class Document(TenantModel):
     doc_number = db.Column(db.String(100))
     topic_words = db.Column(db.String(500))
     uploaded_by = db.Column(GUID())
+    
+# ==================== 文档切块表 ====================
+class Chunk(TenantModel):
+    __tablename__ = "chunks"
+
+    document_id = db.Column(GUID(), db.ForeignKey("documents.id"), nullable=False, index=True)
+    dataset_id = db.Column(GUID(), db.ForeignKey("datasets.id"), nullable=False, index=True)
+    content = db.Column(db.Text, nullable=False)
+    token_count = db.Column(db.Integer, default=0)
+    chunk_index = db.Column(db.Integer, nullable=False)
+
+# ==================== 对话表 ====================
+class Dialog(TenantModel):
+    __tablename__ = "dialog"
+    
+    name = db.Column(db.String(255), nullable=True, index=True)
+    description = db.Column(db.Text, nullable=True)
+    icon = db.Column(db.Text, nullable=True)
+    language = db.Column(db.String(32), nullable=True, default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English", index=True)
+    llm_id = db.Column(db.String(128), nullable=False)
+    tenant_llm_id = db.Column(GUID(), nullable=True, index=True)
+
+    llm_setting = db.Column(db.JSON, nullable=False, default=lambda: {"temperature": 0.1, "top_p": 0.3, "frequency_penalty": 0.7, "presence_penalty": 0.4, "max_tokens": 512})
+    prompt_type = db.Column(db.String(16), nullable=False, default="simple", index=True)
+    prompt_config = db.Column(db.JSON,
+        nullable=False,
+        default=lambda: {"system": "", "prologue": "Hi! I'm your assistant. What can I do for you?", "parameters": [], "empty_response": "Sorry! No relevant content was found in the knowledge base!"},
+    )
+    meta_data_filter = db.Column(db.JSON, nullable=True, default=dict)
+
+    similarity_threshold = db.Column(db.Float, default=0.2)
+    vector_similarity_weight = db.Column(db.Float, default=0.3)
+
+    top_n = db.Column(db.Integer, default=6)
+
+    top_k = db.Column(db.Integer, default=1024)
+
+    do_refer = db.Column(db.String(1), nullable=False, default="1")
+
+    rerank_id = db.Column(db.String(128), nullable=False)
+    tenant_rerank_id = db.Column(GUID(), nullable=True, index=True)
+    kb_ids = db.Column(db.JSON, nullable=False, default=list)
+    status = db.Column(db.String(1), nullable=True, default="1", index=True)
+
+
+# ==================== 对话表 ====================
+class Conversation(TenantModel):
+    __tablename__ = "conversation"
+    
+    dialog_id = db.Column(GUID(), db.ForeignKey("dialog.id"), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=True, index=True)
+    message = db.Column(db.JSON, nullable=True)
+    reference = db.Column(db.JSON, nullable=True, default=list)
+    user_id = db.Column(GUID(), nullable=True, index=True)

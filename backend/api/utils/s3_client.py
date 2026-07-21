@@ -42,6 +42,10 @@ def get_file_url(object_key: str, bucket: str = None) -> str:
     bucket = bucket or current_app.config["MINIO_BUCKET"]
     return client.presigned_get_object(bucket, object_key, expires=7 * 24 * 3600)
 
+def download_file(object_key: str, local_path: str, bucket: str = None):
+    client = get_minio_client()
+    bucket = bucket or current_app.config["MINIO_BUCKET"]
+    client.fget_object(bucket, object_key, local_path)
 
 def remove_object(object_key: str, bucket: str = None):
     """删除 MinIO 中的对象"""

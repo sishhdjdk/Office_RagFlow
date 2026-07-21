@@ -38,11 +38,13 @@ def _register_blueprints(app):
     from api.apps.restful_apis.dataset_api import dataset_bp
     from api.apps.restful_apis.file_api import file_bp
     from api.apps.restful_apis.document_api import document_bp
+    from api.apps.restful_apis.chunk_api import chunk_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     app.register_blueprint(dataset_bp, url_prefix="/api/v1")
     app.register_blueprint(file_bp, url_prefix="/api/v1")
     app.register_blueprint(document_bp, url_prefix="/api/v1")
+    app.register_blueprint(chunk_bp, url_prefix="/api/v1")
 
 
 def _register_system_routes(app):

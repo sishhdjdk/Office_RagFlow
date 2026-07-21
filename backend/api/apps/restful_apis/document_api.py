@@ -31,7 +31,7 @@ def list_documents(dataset_id):
 
     return paginated([d.to_dict() for d in items], total, page, page_size)
 
-
+# role: 创建文档接口，关联已上传的文件，并补充元数据
 @document_bp.route("/datasets/<dataset_id>/documents", methods=["POST"])
 @login_required
 def create_document(dataset_id):
@@ -85,7 +85,7 @@ def create_document(dataset_id):
     db.session.commit()
     return success([d.to_dict() for d in docs])
 
-
+# role: 获取文档详情接口
 @document_bp.route("/documents/<doc_id>", methods=["GET"])
 @login_required
 def get_document(doc_id):
@@ -115,3 +115,16 @@ def delete_document(doc_id):
 
     db.session.commit()
     return success(None, "已删除")
+
+@document_bp.route("/documents/<doc_id>/parse", methods=["POST"])
+@login_required
+def parse_document(doc_id):
+    """触发异步文档解析（对标 RAGFlow POST /documents/parse）"""
+    doc = Document.query.filter_by(id=doc_id, tenant_id=g.tenant_id).first()
+    if not doc:
+        return error("文档不存在", 404)
+    if doc.status == "parsing":
+        return error("文档正在解析中，请稍后再试")
+    from api.tasks.document_tasks import parse_document as async_parse
+    async_parse.delay(str(doc_id))
+    return success(None, "已加入解析队列")
